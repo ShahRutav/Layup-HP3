@@ -31,6 +31,13 @@ Model::Model(int n, int c, int h, int w) {
     this->input_size = c * h * w;
     CUBLAS_CALL( cublasCreate(&cublasHandle) );
     CUDNN_CALL( cudnnCreate(&cudnnHandle) );
+
+    CUDA_CALL( cudaStreamCreate(&compute_stream) );
+    CUDA_CALL( cudaStreamCreate(&transfer_stream) );
+
+    CUBLAS_CALL( cublasSetStream(cublasHandle, &compute_stream) );
+    CUBLAS_CALL( cudnnSetStream(cudnnHandle, &compute_stream) );
+
     this->layers = new std::vector<Layer *>;
     this->layers->push_back(new Input(n, c, h, w, cublasHandle, cudnnHandle));
     printf("Model init done.\n");

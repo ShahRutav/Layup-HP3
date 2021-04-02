@@ -65,6 +65,9 @@ private:
     /** cuDNN library context */
     cudnnHandle_t cudnnHandle;
 
+    cudaStream_t compute_stream;
+    cudaStream_t transfer_stream;
+
     /** Workspace for cuDNN scratch work during convolutions */
     float *workspace = nullptr;
 
