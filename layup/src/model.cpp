@@ -17,6 +17,7 @@
 #include "layers.hpp"
 #include "model.hpp"
 #include "helper_cuda.h"
+using namespace std;
 
 /**
  * Initializes a neural network that does a forwards and backwards pass on
@@ -35,8 +36,8 @@ Model::Model(int n, int c, int h, int w) {
     CUDA_CALL( cudaStreamCreate(&compute_stream) );
     CUDA_CALL( cudaStreamCreate(&transfer_stream) );
 
-    CUBLAS_CALL( cublasSetStream(cublasHandle, &compute_stream) );
-    CUBLAS_CALL( cudnnSetStream(cudnnHandle, &compute_stream) );
+    CUBLAS_CALL( cublasSetStream(cublasHandle, compute_stream) );
+    CUDNN_CALL( cudnnSetStream(cudnnHandle, compute_stream) );
 
     this->layers = new std::vector<Layer *>;
     this->layers->push_back(new Input(n, c, h, w, cublasHandle, cudnnHandle));
@@ -314,19 +315,51 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
 {
     assert(this->has_loss && "Cannot train without a loss function.");
 
-    // Copy input and output minibatches into the model's buffers
-    copy_input_batch(batch_X);
-    copy_output_batch(batch_Y);
-
     // Do a forward pass through every layer
+    int layer_num = 0;
     std::vector<Layer *>::iterator it;
+    cudaEvent_t seq_start, seq_end;
+    cudaEventCreate(&seq_start);
+    cudaEventCreate(&seq_end);
+    cudaEventRecord(seq_start,0);
     for (it = this->layers->begin(); it != this->layers->end(); ++it)
-        (*it)->forward_pass();
+    {
+        // cout<<"Layer number : "<<layer_num<<endl;
+        (*it)->ComputeSensitive_forward(this->compute_stream);
+        
+        // Copy input and output minibatches into the model's buffers
+        if(it == this->layers->begin())
+            copy_input_batch(batch_X);
+        if((*it) == this->layers->back())
+            copy_output_batch(batch_Y);
 
+        (*it)->forward_pass();
+        CUDA_CALL( cudaStreamSynchronize (compute_stream) );
+        CUDA_CALL( cudaStreamSynchronize (transfer_stream) );  
+        // cout<<"Layer forward end : "<<layer_num<<endl;
+        layer_num++;
+    }
+    // cout<<"backward start"<<endl;
     // Do a backward pass through every layer
+    layer_num = 0;
     std::vector<Layer *>::reverse_iterator rit;
+    layer_num = 0;
     for (rit = this->layers->rbegin(); rit != this->layers->rend(); ++rit)
+    {
+        // cout<<"backward_pass for : "<<layer_num<<endl;
+        (*rit)->ComputeSensitive_backward(compute_stream);
         (*rit)->backward_pass(lr);
+        CUDA_CALL( cudaStreamSynchronize (compute_stream) );
+        CUDA_CALL( cudaStreamSynchronize (transfer_stream) ); 
+        (*rit)->free_out_mem();
+        // cout<<"backward_pass done : "<<layer_num<<endl;
+        layer_num++;
+    }
+    cudaEventRecord(seq_end,0);
+    cudaEventSynchronize(seq_end);
+    float time_taken = 0.0;
+    cudaEventElapsedTime(&time_taken, seq_start, seq_end);
+    // std:: cout << "Time Taken compute = " << time_taken << std:: endl;
 }
 
 

@@ -45,6 +45,7 @@ public:
 
     /* Valid getters for all layers */
     float *get_output_fwd() const;
+    float *get_input_fwd() const;
     float *get_input_bwd() const;
     cudnnTensorDescriptor_t get_in_shape() const;
     cudnnTensorDescriptor_t get_out_shape() const;
@@ -52,6 +53,13 @@ public:
     /* Methods used to set up a cuDNN workspace for faster convolutions */
     virtual size_t get_workspace_size() const;
     void set_workspace(float *workspace, size_t workspace_size);
+
+    void ComputeSensitive_forward(cudaStream_t transfer_stream);
+    void ComputeSensitive_backward(cudaStream_t transfer_stream);
+    int input_size, output_size;
+    int is_compute_sensitive = 1;
+    float *h_in_batchPinned = nullptr;
+    void free_out_mem();
 
 protected:
     /** Previous layer. */
@@ -134,6 +142,11 @@ protected:
 
     /** The number of biases in this layer */
     int n_biases = 0;
+
+    // if(is_compute_sensitive)
+    // {
+    // }
+
 };
 
 
