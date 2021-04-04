@@ -158,11 +158,11 @@ void Layer::allocate_buffers()
     // The buffers to store the input minibatch in_batch and its derivative
     // grad_in_batch are already stored in the previous layer, so just share a
     // pointer.
-    if (prev)
-    {
+    // if (prev)
+    // {
         // this->in_batch = prev->get_output_fwd(); // Removed the allocation
-        this->grad_in_batch = prev->get_input_bwd();
-    }
+        // this->grad_in_batch = prev->get_input_bwd();
+    // }
 
     // Get the shape of the output
     cudnnDataType_t dtype;
@@ -173,7 +173,7 @@ void Layer::allocate_buffers()
     // out_batch and grad_out_batch have the same shape as the output
     int out_size = n * c * h * w;
     // CUDA_CALL( cudaMalloc(&out_batch, out_size * sizeof(float)) ); // Removed the allocation
-    CUDA_CALL( cudaMalloc(&grad_out_batch, out_size * sizeof(float)) );
+    // CUDA_CALL( cudaMalloc(&grad_out_batch, out_size * sizeof(float)) );
 
     // Allocate buffers for the weights and biases (if there are any)
     if (n_weights > 0)
@@ -220,6 +220,10 @@ void Layer::init_weights_biases()
     CURAND_CALL( curandDestroyGenerator(gen) );
 }
 
+void Layer::allocate_grad_out_batch()
+{
+    CUDA_CALL( cudaMalloc(&grad_out_batch, output_size*sizeof(float)) );
+}
 
 void Layer::free_out_mem()
 {
@@ -227,6 +231,8 @@ void Layer::free_out_mem()
     {
         CUDA_CALL( cudaFree(out_batch) );
     }
+    // if(grad_out_batch)
+    CUDA_CALL( cudaFree(grad_out_batch) );
     if(prev)
         CUDA_CALL( cudaFreeHost(prev->h_in_batchPinned) );
 }
@@ -235,7 +241,7 @@ void Layer::ComputeSensitive_forward(cudaStream_t transfer_stream)
 {
     if (prev)
     {
-        in_batch = prev->get_output_fwd();
+        in_batch = prev->get_output_fwd(); // in_batch = prev->out_batch
         CUDA_CALL( cudaMallocHost((void**) &( h_in_batchPinned ), input_size * sizeof(float) ) );
         CUDA_CALL( cudaMemcpyAsync(( h_in_batchPinned ), ( in_batch ), input_size * sizeof(float), cudaMemcpyDeviceToHost, transfer_stream) );
         if (prev->prev)
@@ -248,6 +254,10 @@ void Layer::ComputeSensitive_backward(cudaStream_t transfer_stream)
 {
     if(prev)
     {
+        CUDA_CALL( cudaMalloc(&prev->grad_out_batch, prev->output_size*sizeof(float)) );
+        // CUDA_CALL( cudaMalloc(&grad_in_batch, input_size*sizeof(float)) );
+        grad_in_batch = prev->grad_out_batch; // grad_in_batch = prev->grad_out_batch
+        // prev->grad_out_batch = grad_in_batch; // prev->grad_out_batch = grad_in_batch 
         // CUDA_CALL( cudaMalloc( (void **) &( prev->get_input_fwd() ), prev->input_size*sizeof(float) ) );
         // float *temp_in_batch = prev->get_input_fwd();
         CUDA_CALL( cudaMalloc( &prev->in_batch, (prev->input_size)*sizeof(float) ) );
@@ -281,7 +291,8 @@ Input::Input(int n, int c, int h, int w,
         dtype, n, c, h, w) ); // Settting the parameters for descriptor.
     printf("Input Constructor, Batch size : %d, Channels : %d, Height :  %d, Wdith : %d\n", n,c,h,w);
     allocate_buffers();
-    output_size = n*c*h*w;    
+    output_size = n*c*h*w;
+    cout<<"Output size : "<<output_size<<endl;
 }
 
 Input::~Input() = default;
@@ -333,7 +344,8 @@ Dense::Dense(Layer *prev, int out_dim,
     cudaMemsetType<float>(onevec, 1.0f, batch_size);
 
     input_size = prev->output_size;
-    output_size = out_size;
+    output_size = out_size*batch_size;
+    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
 }
 
 Dense::~Dense()
@@ -474,6 +486,7 @@ Activation::Activation(Layer *prev, cudnnActivationMode_t activationMode,
 
     input_size = prev->output_size;
     output_size = n*c*h*w;
+    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
 }
 
 Activation::~Activation()
@@ -605,7 +618,7 @@ Conv2D::Conv2D(Layer *prev, int n_kernels, int kernel_size, int stride,
 
     input_size = prev->output_size;
     output_size = n*c*h*w;
-
+    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
     // Allocate all relevant buffers and initialize filters and biases
     allocate_buffers();
     init_weights_biases();
@@ -775,7 +788,7 @@ Pool2D::Pool2D(Layer* prev, int stride, cudnnPoolingMode_t mode,
     
     input_size = prev->output_size;
     output_size = n*c*h*w;
-
+    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
     // Allocate output buffer
     allocate_buffers();
 }
@@ -858,6 +871,7 @@ SoftmaxCrossEntropy::SoftmaxCrossEntropy(Layer *prev,
     
     input_size = prev->output_size;
     output_size = n*c*h*w;
+    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
 
     allocate_buffers();
 }

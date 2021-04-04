@@ -325,13 +325,16 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
     for (it = this->layers->begin(); it != this->layers->end(); ++it)
     {
         // cout<<"Layer number : "<<layer_num<<endl;
-        (*it)->ComputeSensitive_forward(this->compute_stream);
+        (*it)->ComputeSensitive_forward(this->transfer_stream);
         
         // Copy input and output minibatches into the model's buffers
         if(it == this->layers->begin())
             copy_input_batch(batch_X);
         if((*it) == this->layers->back())
+        {
+            (*it)->allocate_grad_out_batch();
             copy_output_batch(batch_Y);
+        }
 
         (*it)->forward_pass();
         CUDA_CALL( cudaStreamSynchronize (compute_stream) );
@@ -341,13 +344,13 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
     }
     // cout<<"backward start"<<endl;
     // Do a backward pass through every layer
-    layer_num = 0;
     std::vector<Layer *>::reverse_iterator rit;
     layer_num = 0;
+
     for (rit = this->layers->rbegin(); rit != this->layers->rend(); ++rit)
     {
         // cout<<"backward_pass for : "<<layer_num<<endl;
-        (*rit)->ComputeSensitive_backward(compute_stream);
+        (*rit)->ComputeSensitive_backward(transfer_stream);
         (*rit)->backward_pass(lr);
         CUDA_CALL( cudaStreamSynchronize (compute_stream) );
         CUDA_CALL( cudaStreamSynchronize (transfer_stream) ); 

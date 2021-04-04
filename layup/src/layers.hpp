@@ -56,6 +56,7 @@ public:
 
     void ComputeSensitive_forward(cudaStream_t transfer_stream);
     void ComputeSensitive_backward(cudaStream_t transfer_stream);
+    void allocate_grad_out_batch();
     int input_size, output_size;
     int is_compute_sensitive = 1;
     float *h_in_batchPinned = nullptr;
