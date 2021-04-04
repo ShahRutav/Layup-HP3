@@ -38,7 +38,7 @@ public:
     result *evaluate(const float *eval_X, float *eval_Y, int num_examples);
 
 private:
-    void train_on_batch(const float *batch_X, float *batch_Y, float lr);
+    void train_on_batch(const float *batch_X, float *batch_Y, float lr, float *loss, float *acc, float *total_time_taken);
     float *predict_on_batch(const float *batch_X);
     result *evaluate_on_batch(const float *batch_X, float *batch_Y);
 

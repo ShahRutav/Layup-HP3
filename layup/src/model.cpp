@@ -188,6 +188,7 @@ void Model::train(const float *train_X, float *train_Y, float lr, int n_examples
     int in_size = get_output_batch_size(layers->front());
     int out_size = get_output_batch_size(layers->back());
     int n_batches = n_examples / batch_size;
+    float total_time_taken = 0;
 
     for (int i = 0; i < n_epochs; ++i)
     {
@@ -203,17 +204,18 @@ void Model::train(const float *train_X, float *train_Y, float lr, int n_examples
         {
             const float *curr_batch_X = train_X + curr_batch * in_size;
             float *curr_batch_Y = train_Y + curr_batch * out_size;
-            train_on_batch(curr_batch_X, curr_batch_Y, lr);
+            train_on_batch(curr_batch_X, curr_batch_Y, lr, &loss, &acc, &total_time_taken);
 			//printf("Okay Stop after callin train on batch\n");
 	   		//exit(0);	
 
             // Update training statistics for this minibatch
-            acc += this->layers->back()->get_accuracy();
-            loss += this->layers->back()->get_loss();
+            // acc += this->layers->back()->get_accuracy();
+            // loss += this->layers->back()->get_loss();
         }
 
         std::cout << "Loss: " << loss / n_batches;
         std::cout << ",\tAccuracy: " << (100 * acc / n_batches);
+        cout<<"\tTime Taken : "<<total_time_taken;
         std::cout << std::endl << std::endl;
     }
 }
@@ -311,7 +313,7 @@ result *Model::evaluate(const float *eval_X, float *eval_Y, int n_examples)
  * @param lr The learning rate (coefficient by which we multiply the gradient
  *           when adding it to the current parameter values)
  */
-void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
+void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr, float *loss, float *acc, float *total_time_taken)
 {
     assert(this->has_loss && "Cannot train without a loss function.");
 
@@ -329,11 +331,15 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
         
         // Copy input and output minibatches into the model's buffers
         if(it == this->layers->begin())
+        {
             copy_input_batch(batch_X);
+            CUDA_CALL( cudaDeviceSynchronize() );
+        }
         if((*it) == this->layers->back())
         {
             (*it)->allocate_grad_out_batch();
             copy_output_batch(batch_Y);
+            CUDA_CALL( cudaDeviceSynchronize() );
         }
 
         (*it)->forward_pass();
@@ -353,8 +359,16 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
         (*rit)->ComputeSensitive_backward(transfer_stream);
         (*rit)->backward_pass(lr);
         CUDA_CALL( cudaStreamSynchronize (compute_stream) );
-        CUDA_CALL( cudaStreamSynchronize (transfer_stream) ); 
+        CUDA_CALL( cudaStreamSynchronize (transfer_stream) );
+        
+        if(rit == this->layers->rbegin())
+        {
+            (*acc) += (*rit)->get_accuracy();
+            (*loss) += (*rit)->get_loss();
+        }
+
         (*rit)->free_out_mem();
+        (*rit)->free_host_mem();
         // cout<<"backward_pass done : "<<layer_num<<endl;
         layer_num++;
     }
@@ -362,6 +376,7 @@ void Model::train_on_batch(const float *batch_X, float *batch_Y, float lr)
     cudaEventSynchronize(seq_end);
     float time_taken = 0.0;
     cudaEventElapsedTime(&time_taken, seq_start, seq_end);
+    (*total_time_taken) += time_taken;
     // std:: cout << "Time Taken compute = " << time_taken << std:: endl;
 }
 

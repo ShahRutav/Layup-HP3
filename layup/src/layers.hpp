@@ -61,6 +61,7 @@ public:
     int is_compute_sensitive = 1;
     float *h_in_batchPinned = nullptr;
     void free_out_mem();
+    void free_host_mem();
 
 protected:
     /** Previous layer. */

@@ -231,8 +231,11 @@ void Layer::free_out_mem()
     {
         CUDA_CALL( cudaFree(out_batch) );
     }
-    // if(grad_out_batch)
     CUDA_CALL( cudaFree(grad_out_batch) );
+}
+
+void Layer::free_host_mem()
+{
     if(prev)
         CUDA_CALL( cudaFreeHost(prev->h_in_batchPinned) );
 }
@@ -292,7 +295,6 @@ Input::Input(int n, int c, int h, int w,
     printf("Input Constructor, Batch size : %d, Channels : %d, Height :  %d, Wdith : %d\n", n,c,h,w);
     allocate_buffers();
     output_size = n*c*h*w;
-    cout<<"Output size : "<<output_size<<endl;
 }
 
 Input::~Input() = default;
@@ -344,8 +346,7 @@ Dense::Dense(Layer *prev, int out_dim,
     cudaMemsetType<float>(onevec, 1.0f, batch_size);
 
     input_size = prev->output_size;
-    output_size = out_size*batch_size;
-    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
+    output_size = out_dim*batch_size;
 }
 
 Dense::~Dense()
@@ -486,7 +487,6 @@ Activation::Activation(Layer *prev, cudnnActivationMode_t activationMode,
 
     input_size = prev->output_size;
     output_size = n*c*h*w;
-    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
 }
 
 Activation::~Activation()
@@ -618,7 +618,7 @@ Conv2D::Conv2D(Layer *prev, int n_kernels, int kernel_size, int stride,
 
     input_size = prev->output_size;
     output_size = n*c*h*w;
-    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
+
     // Allocate all relevant buffers and initialize filters and biases
     allocate_buffers();
     init_weights_biases();
@@ -788,7 +788,6 @@ Pool2D::Pool2D(Layer* prev, int stride, cudnnPoolingMode_t mode,
     
     input_size = prev->output_size;
     output_size = n*c*h*w;
-    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
     // Allocate output buffer
     allocate_buffers();
 }
@@ -871,7 +870,6 @@ SoftmaxCrossEntropy::SoftmaxCrossEntropy(Layer *prev,
     
     input_size = prev->output_size;
     output_size = n*c*h*w;
-    cout<<"Output size : "<<output_size<<" ; Input Size : "<<input_size<<endl;
 
     allocate_buffers();
 }
